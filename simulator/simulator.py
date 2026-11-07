@@ -10,7 +10,7 @@ from inspect import signature
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
-from solution.policies.recursive_fleet import dispatch as default_dispatch
+from solution.policies.baseline import dispatch
 from .loaders import FilePath, day_input_paths, load_config, load_distances, load_parcels
 from .models import (
     Delivery, DispatchPlanning, Event, HubDeparture, Parcel, ParcelArrival, SimulationContext,
@@ -52,7 +52,7 @@ class Simulator:
         self, parcels_csv: FilePath, dist_csv: FilePath, config_json: FilePath,
         *, dispatch_policy: Optional[DispatchPolicy] = None,
     ) -> None:
-        """Load inputs and schedule initial events; use recursive_fleet unless a policy is supplied."""
+        """Load inputs and schedule initial events; use baseline unless a policy is supplied."""
 
         self.config = load_config(config_json)
         self.dispatch_policy = dispatch_policy
@@ -167,7 +167,7 @@ class Simulator:
                 for vehicle, available_at in self.available_at.items()
             },
         }
-        policy = default_dispatch if self.dispatch_policy is None else self.dispatch_policy
+        policy = dispatch if self.dispatch_policy is None else self.dispatch_policy
         selected = policy(parcel, simulation_context)
         if not isinstance(selected, list):
             raise ValueError(f"vehicle {vehicle_id}: dispatch must return a list")
@@ -309,7 +309,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     """Run one day from the command line and write the event log."""
 
     parser = argparse.ArgumentParser(description="Run one day with a selected dispatch policy.")
-    parser.add_argument("--policy", default="solution.policies.recursive_fleet",
+    parser.add_argument("--policy", default="solution.policies.baseline",
                         help="Python module exposing dispatch(parcel, context)")
     parser.add_argument("--data", type=Path, default=Path("data"),
                         help="directory containing dist.csv, config.json and demand/")

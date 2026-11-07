@@ -11,20 +11,20 @@ def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]
     """Build one trip by trying every waiting parcel in arrival order.
 
     A parcel that would break capacity, range or the return cutoff is skipped,
-    and later parcels are still tried. Preferred delivery windows are ignored.
-    Parcel IDs break arrival-time ties. Inputs are snapshots and are never modified.
+    and later parcels are still tried. Parcel IDs break arrival-time ties.
+    Preferred delivery windows are ignored. Inputs are snapshots and are never modified.
     """
 
     distances = context["travel_distance"]
     departure = context["current_time"] + context["departure_delay"]
     max_distance = context["max_trip_distance_km"]
     waiting = sorted(
-        (parcel_id for parcel_id, record in parcel.items()
-         if record["vehicle_assigned"] is None),
+        (parcel_id for parcel_id, record in parcel.items() if record["vehicle_assigned"] is None),
         key=lambda parcel_id: (parcel[parcel_id]["arrival_time"], parcel_id),
     )
     route: List[str] = []
     load = 0.0
+    # km from the hub to the route's last stop, not counting the return leg.
     travelled = 0.0
     location = HUB
     for parcel_id in waiting:
@@ -34,6 +34,7 @@ def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]
         destination = record["delivery_location_id"]
         trip_distance = travelled + distances[location][destination]
         round_trip = trip_distance + distances[destination][HUB]
+        # At 60 km/h, km also equals travel time in minutes.
         if round_trip > max_distance or departure + round_trip > context["return_cutoff"]:
             continue
         route.append(parcel_id)
