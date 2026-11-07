@@ -1,0 +1,13 @@
+{
+  "service_rate": 0.29015544041450775,
+  "on_time_rate": 0.29015544041450775,
+  "delivered_rate": 0.3549222797927461,
+  "on_time_rate_delivered": 0.8175182481751825,
+  "on_time_count": 224,
+  "delivered_count": 274,
+  "total_parcels": 772,
+  "late_count": 50,
+  "early_count": 0,
+  "avg_lateness_minutes": 299.40934,
+  "number_of_trips": 20
+}
