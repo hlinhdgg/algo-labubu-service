@@ -1,35 +1,22 @@
 """Cheapest insertion that shortlists parcels near the route, then a 2-opt pass."""
 
-import heapq
 from typing import Dict, List
 
 from simulator.models import Parcel, SimulationContext
 from solution.policies.helpers import (
-    available_parcel_ids,
     build_cheapest_insertion_route,
     effective_budget,
     two_opt_improve,
-    urgency_key,
     worth_waiting,
 )
 
 
 def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]:
-    """Build a route by urgency first, then by nearby greedy insertion."""
-
-    heap = []
-    for parcel_id in available_parcel_ids(parcel):
-        heapq.heappush(heap, (urgency_key(parcel_id, parcel, context), parcel_id))
-
-    candidates = []
-    while heap:
-        _, parcel_id = heapq.heappop(heap)
-        candidates.append(parcel_id)
+    """Build a route from a heap shortlist of nearby parcels, then improve it with 2-opt."""
 
     route = build_cheapest_insertion_route(
         parcel,
         context,
-        candidate_ids=candidates,
         shortlist_by="nearby",
         hold_early=True,
     )

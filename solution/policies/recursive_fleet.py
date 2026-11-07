@@ -1,6 +1,5 @@
 """Fleet-stage cheapest insertion, then recursive exact ordering for small trips."""
 
-import heapq
 from typing import Dict, List, Tuple
 
 from simulator.models import Parcel, SimulationContext
@@ -23,18 +22,14 @@ SLACK_THRESHOLD = 180.0
 def _urgent_groups(
     parcel: Dict[str, Parcel], context: SimulationContext
 ) -> Tuple[List[str], List[str], List[str]]:
-    """Use a binary heap to classify parcels by urgency and fleet availability."""
+    """Classify parcels by urgency and fleet availability."""
 
     gap = next_truck_gap(context)
-    heap: List[Tuple[float, str]] = []
-    for parcel_id in available_parcel_ids(parcel):
-        heapq.heappush(heap, (urgency_key(parcel_id, parcel, context), parcel_id))
-
     must_take: List[str] = []
     tight: List[str] = []
     relaxed: List[str] = []
-    while heap:
-        slack, parcel_id = heapq.heappop(heap)
+    for parcel_id in available_parcel_ids(parcel):
+        slack = urgency_key(parcel_id, parcel, context)
         if 0 <= slack < gap and slack <= SLACK_THRESHOLD:
             must_take.append(parcel_id)
         elif slack <= SLACK_THRESHOLD:
