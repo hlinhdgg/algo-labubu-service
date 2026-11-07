@@ -106,7 +106,6 @@ Service rate unless stated; “÷ delivered” means on-time ÷ delivered, used 
 
 | Idea | Result | Why dropped |
 |---|---|---|
-| Relocate moves after fleet-stage insertion (`relocate_local`) | 93.78%, worst day 86.53% | Outside our syllabus list, and below `fleet_aware` |
 | Stop waiting if a last-chance parcel exists, without loading it | 95.69% → 95.63% (days 1–10) | The truck leaves without those parcels |
 | Block re-ordering that causes early arrivals | Early 64 → 0, late 36 → 111, 95.69% → 95.62% (days 1–10) | A few minutes early costs little under this metric |
 | Shorter distance limit (0.8) | `exhaustive_small` 91.0% → 91.5% on days 1–10, 90.6% → 90.2% on days 11–20 | Only looked better on the tuning days |
