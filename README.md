@@ -24,7 +24,7 @@ Only the retained policies with reasonable complexity are kept:
 | `solution.policies.fleet_aware` | Fleet-aware greedy insertion with last-chance prioritization, endgame waiting, detour-limited filler, and exhaustive ordering for small trips |
 | `solution.policies.exhaustive_small` | Greedy insertion followed by exhaustive stop ordering for trips with at most 8 stops |
 | `solution.policies.priority_nearest` | Binary-heap urgency ordering, greedy nearby insertion, and 2-opt local search |
-| `solution.policies.relocate_local` | Fleet-aware greedy insertion followed by relocate-move local search and 2-opt |
+| `solution.policies.local_search` | Greedy insertion, then exhaustive stop ordering for trips with at most 8 stops and bounded 2-opt for larger trips |
 | `solution.policies.recursive_fleet` | Binary-heap urgency ordering, greedy insertion, recursive exhaustive ordering for small trips, and 2-opt for larger trips |
 
 All retained policies respect capacity, vehicle range, and the 18:00 return cutoff. They use service loss as the primary route objective and distance as a secondary consideration. The shared waiting rule is in `solution/policies/helpers.py`.
@@ -34,10 +34,11 @@ All retained policies respect capacity, vehicle range, and the 18:00 return cuto
 | Policy | Service rate | Std dev | Worst day | Days 1-10 | Days 11-20 | Strict on-time | Delivered rate | On-time / delivered | Trips/day |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | `fleet_aware` | **95.99%** | 0.48% | 95.13% | 95.96% | 96.01% | 94.63% | 96.35% | 98.22% | 32 |
-| `recursive_fleet` | 93.91% | 2.12% | 87.92% | 94.15% | 93.67% | 91.41% | 96.17% | 95.06% | 30.85 |
-| `relocate_local` | 93.79% | 2.21% | 87.39% | 93.99% | 93.58% | 91.23% | 96.16% | 94.87% | 30.80 |
-| `priority_nearest` | 92.61% | 3.10% | 84.80% | 92.85% | 92.38% | 89.72% | 96.17% | 93.30% | 30.95 |
+| `recursive_fleet` | 93.87% | 2.23% | 87.92% | 94.07% | 93.66% | 91.41% | 96.17% | 95.05% | 31 |
+| `priority_nearest` | 92.63% | 3.28% | 84.36% | 92.90% | 92.36% | 90.12% | 96.19% | 93.70% | 31 |
 | `exhaustive_small` | 91.95% | 2.28% | 88.11% | 92.23% | 91.67% | 86.95% | 95.73% | 90.82% | 30 |
+| `local_search` | 91.69% | 1.99% | 87.70% | 92.09% | 91.29% | 87.09% | 95.81% | 90.90% | 30 |
+| `baseline` | 27.41% | 1.61% | 24.75% | 27.23% | 27.58% | 27.41% | 40.47% | 67.73% | 21 |
 
 `fleet_aware` is the best retained policy at 95.99%, just below the 96% acceptance target and 0.47 points below the 96.46% ceiling. Delivered rate and on-time / delivered are pooled over all parcels; the other columns are averages of daily values.
 
@@ -46,7 +47,7 @@ All retained policies respect capacity, vehicle range, and the 18:00 return cuto
 PowerShell:
 
 ```powershell
-$policies = @("baseline", "fleet_aware", "recursive_fleet", "relocate_local", "priority_nearest", "exhaustive_small")
+$policies = @("baseline", "fleet_aware", "recursive_fleet", "local_search", "priority_nearest", "exhaustive_small")
 
 foreach ($policy in $policies) {
     foreach ($n in 1..20) {
@@ -61,7 +62,7 @@ foreach ($policy in $policies) {
 Bash:
 
 ```bash
-for policy in baseline fleet_aware recursive_fleet relocate_local priority_nearest exhaustive_small; do
+for policy in baseline fleet_aware recursive_fleet local_search priority_nearest exhaustive_small; do
   for n in $(seq -w 1 20); do
     day="day_0$n"
     python3 -m simulator --policy solution.policies.$policy \
@@ -78,7 +79,7 @@ Each run writes `log.txt` and `metrics.json` under `results/<policy>/<day>/`.
 
 The retained insertion and local-search policies compare routes using service loss first and distance second. Service loss at a stop is the same scaled penalty used by `service_rate`, so a small near-miss is preferred to a much larger miss when other constraints are equal.
 
-Small routes are exhaustively ordered because 8 stops require 40,320 orders; larger routes use bounded 2-opt or relocate local search. Heap-based urgency ordering limits the number of candidates examined at each greedy insertion step.
+Small routes are exhaustively ordered because 8 stops require 40,320 orders; larger routes use bounded 2-opt. Heap-based urgency ordering limits the number of candidates examined at each greedy insertion step.
 
 ## Notes on `fleet_aware` and `exhaustive_small`
 
@@ -189,3 +190,4 @@ Tested on days 1–10 and not in `solution/`, except where noted. Each says whic
 - **Trimming long trips in the morning** (on-time ÷ delivered, days 1–10): `fleet_aware` 95.5% → 64.0–94.6%, `exhaustive_small` 92.5% → 74.6–91.1%. The filler limit later achieved this aim while the trip is being built.
 - **Only stopping the truck from waiting when a last-chance parcel exists** (service rate, days 1–10): 95.69% → 95.63%. The truck leaves, but the last-chance parcels are still not on it.
 - **Stopping `best_stop_order` from creating early arrivals** (service rate, days 1–10): early parcels 64 → 0, but late parcels 36 → 111 and 95.69% → 95.62%. Arriving a few minutes early costs little under the service rate, so these re-orders are kept.
+- **Relocate moves after fleet-stage insertion** (`relocate_local`; service rate, all 20 days): 93.78%, worst day 86.53%. Removed because relocate moves are outside our syllabus list, and it scored below `fleet_aware`.
