@@ -1,12 +1,4 @@
-"""Urgency-heap plus nearby greedy insertion policy.
-
-Approved techniques used:
-* binary-heap priority queue for urgency;
-* greedy cheapest insertion;
-* nearest/nearby stop selection through the helper's shortlist;
-* 2-opt local search;
-* lists, dictionaries and sets.
-"""
+"""Cheapest insertion that shortlists parcels near the route, then a 2-opt pass."""
 
 import heapq
 from typing import Dict, List
