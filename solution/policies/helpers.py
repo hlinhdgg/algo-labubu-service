@@ -139,16 +139,6 @@ def route_cost(
     return (service_lost(route, parcel, distances, departure_time), route_distance(route, parcel, distances))
 
 
-def is_feasible(route: Sequence[str], parcel: Dict[str, Parcel], context: SimulationContext) -> bool:
-    """Check capacity and the real (hard) distance budget for a candidate route."""
-
-    total_size = sum(parcel[parcel_id]["size"] for parcel_id in route)
-    if total_size > context["capacity"] + 1e-9:
-        return False
-    distance = route_distance(route, parcel, context["travel_distance"])
-    return distance <= effective_budget(context) + 1e-9
-
-
 def best_insertion_slot(
     route: Sequence[str],
     candidate_id: str,
@@ -216,6 +206,25 @@ def urgency_key(parcel_id: str, parcel: Dict[str, Parcel], context: SimulationCo
     departure_time = context["current_time"] + context["departure_delay"]
     projected_arrival = departure_time + context["travel_distance"][HUB][destination]
     return record["delivery_window_end"] - projected_arrival
+
+
+def next_truck_gap(context: SimulationContext) -> float:
+    """Minutes until the next busy truck could leave the hub, after this truck leaves.
+
+    A parcel with less slack than this cannot wait for that truck. Returns infinity
+    when no other truck is out, i.e. nobody else is due back.
+    """
+
+    now = context["current_time"]
+    delay = context["departure_delay"]
+    next_departures = [
+        vehicle["available_at"] + delay
+        for vehicle_id, vehicle in context["fleet"].items()
+        if vehicle_id != context["vehicle_id"] and vehicle["available_at"] > now
+    ]
+    if not next_departures:
+        return float("inf")
+    return min(next_departures) - (now + delay)
 
 
 def _best_candidate(

@@ -1,6 +1,6 @@
 """Policy 4 (exhaustive search on small trips): greedy insertion, then the best stop order.
 
-The parcels for the trip are chosen with greedy insertion (as in greedy_insertion.py).
+The parcels for the trip are chosen with greedy insertion.
 If the trip has at most MAX_EXHAUSTIVE_STOPS different stops, every possible order of
 those stops is tried and the one with the lowest route_cost (least service lost,
 then shortest distance) is kept -- the exact best order, not a heuristic one. Bigger

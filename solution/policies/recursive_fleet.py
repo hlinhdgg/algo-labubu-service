@@ -13,13 +13,14 @@ learning, or external packages.
 """
 
 import heapq
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Tuple
 
 from simulator.models import Parcel, SimulationContext
 from solution.policies.helpers import (
     available_parcel_ids,
     build_cheapest_insertion_route,
     effective_budget,
+    next_truck_gap,
     route_cost,
     two_opt_improve,
     urgency_key,
@@ -31,27 +32,12 @@ MAX_EXHAUSTIVE_STOPS = 8
 SLACK_THRESHOLD = 180.0
 
 
-def _next_truck_gap(context: SimulationContext) -> float:
-    """Minutes until another truck can depart, or infinity if none is busy."""
-
-    now = context["current_time"]
-    delay = context["departure_delay"]
-    departures = [
-        vehicle["available_at"] + delay
-        for vehicle_id, vehicle in context["fleet"].items()
-        if vehicle_id != context["vehicle_id"] and vehicle["available_at"] > now
-    ]
-    if not departures:
-        return float("inf")
-    return min(departures) - (now + delay)
-
-
 def _urgent_groups(
     parcel: Dict[str, Parcel], context: SimulationContext
 ) -> Tuple[List[str], List[str], List[str]]:
     """Use a binary heap to classify parcels by urgency and fleet availability."""
 
-    gap = _next_truck_gap(context)
+    gap = next_truck_gap(context)
     heap: List[Tuple[float, str]] = []
     for parcel_id in available_parcel_ids(parcel):
         heapq.heappush(heap, (urgency_key(parcel_id, parcel, context), parcel_id))
@@ -71,7 +57,6 @@ def _urgent_groups(
 
 
 def _recursive_order(
-    locations: Sequence[str],
     prefix: List[str],
     remaining: set[str],
     parcel_by_location: Dict[str, List[str]],
@@ -98,7 +83,6 @@ def _recursive_order(
         prefix.append(location)
         remaining.remove(location)
         _recursive_order(
-            locations,
             prefix,
             remaining,
             parcel_by_location,
@@ -128,7 +112,6 @@ def _order_route(
     if len(by_location) <= MAX_EXHAUSTIVE_STOPS:
         result: Dict[str, object] = {}
         _recursive_order(
-            list(by_location),
             [],
             set(by_location),
             by_location,

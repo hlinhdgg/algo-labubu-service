@@ -5,7 +5,7 @@ from typing import Dict, List
 from simulator.models import Parcel, SimulationContext
 from solution.policies.helpers import (
     HUB, WAIT_MIN_LOAD, available_parcel_ids, best_stop_order,
-    build_cheapest_insertion_route, preferred_budget, route_arrival_times,
+    build_cheapest_insertion_route, next_truck_gap, preferred_budget, route_arrival_times,
     route_distance, urgency_key, worth_waiting,
 )
 
@@ -14,20 +14,6 @@ SLACK_THRESHOLD = 180.0
 FILLER_MAX_DETOUR = 20.0
 ENDGAME_MINUTES = 150.0
 PLANNING_ROUND = 10.0
-
-
-def _wait_for_next_truck(context: SimulationContext) -> float:
-    """Return minutes until another busy truck could depart."""
-    now = context["current_time"]
-    delay = context["departure_delay"]
-    next_departures = [
-        vehicle["available_at"] + delay
-        for vehicle_id, vehicle in context["fleet"].items()
-        if vehicle_id != context["vehicle_id"] and vehicle["available_at"] > now
-    ]
-    if not next_departures:
-        return float("inf")
-    return min(next_departures) - (now + delay)
 
 
 def _last_chance_parcels(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]:
@@ -70,7 +56,7 @@ def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]
     route = build_cheapest_insertion_route(
         parcel, context, candidate_ids=_last_chance_parcels(parcel, context), hold_early=True
     )
-    gap = _wait_for_next_truck(context)
+    gap = next_truck_gap(context)
     must_take, tight, relaxed = [], [], []
     for parcel_id in available_parcel_ids(parcel):
         if parcel_id in route:
