@@ -1,16 +1,4 @@
-"""Allowed-only fleet policy: heap greedy construction plus recursive ordering.
-
-This policy uses only syllabus-level techniques:
-
-* a binary-heap priority queue for urgency ordering;
-* greedy cheapest insertion to construct each trip;
-* recursive exhaustive search for trips with at most eight stops;
-* local-search 2-opt for larger trips;
-* lists, dictionaries and sets for route and parcel storage.
-
-It does not use beam search, dynamic programming, integer programming, machine
-learning, or external packages.
-"""
+"""Fleet-stage cheapest insertion, then recursive exact ordering for small trips."""
 
 import heapq
 from typing import Dict, List, Tuple
