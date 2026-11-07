@@ -1,4 +1,16 @@
-"""Fleet-aware greedy dispatch policy with last-chance and endgame handling."""
+"""Recommended policy: cheapest insertion in priority stages, using the fleet's return times.
+
+Each truck builds one trip, adding the parcels most at risk first:
+
+1. last-chance parcels: this is the last round they can be sent and still return in time;
+2. must-take parcels: no truck coming back could still deliver them on time;
+3. other tight parcels: at most SLACK_THRESHOLD minutes to spare;
+4. relaxed parcels as filler: only if no stop misses its window and the detour is small.
+
+A parcel is never placed where the truck would arrive before its window opens. A nearly
+empty truck may wait one round so it stays free for later parcels. Trips with at most
+MAX_EXHAUSTIVE_STOPS stops are then put in the exact best order.
+"""
 
 from typing import Dict, List
 
@@ -9,11 +21,11 @@ from solution.policies.helpers import (
     route_distance, urgency_key, worth_waiting,
 )
 
-MAX_EXHAUSTIVE_STOPS = 8
-SLACK_THRESHOLD = 180.0
-FILLER_MAX_DETOUR = 20.0
-ENDGAME_MINUTES = 150.0
-PLANNING_ROUND = 10.0
+MAX_EXHAUSTIVE_STOPS = 8  # 8! = 40,320 orders; 10 stops would be about 3.6 million.
+SLACK_THRESHOLD = 180.0  # A parcel with at most this many minutes to spare is "tight".
+FILLER_MAX_DETOUR = 20.0  # Most km one filler parcel may add, so morning trips stay short.
+ENDGAME_MINUTES = 150.0  # How long before the cut-off end-of-day waiting applies.
+PLANNING_ROUND = 10.0  # Minutes between planning rounds (fixed by the brief).
 
 
 def _last_chance_parcels(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]:
@@ -53,9 +65,12 @@ def _endgame_wait(route: List[str], parcel: Dict[str, Parcel], context: Simulati
 
 def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]:
     """Build one route with last-chance, fleet-aware, and safe filler ordering."""
+    # Stage 1: without this, trucks could wait while these parcels ran out of time.
     route = build_cheapest_insertion_route(
         parcel, context, candidate_ids=_last_chance_parcels(parcel, context), hold_early=True
     )
+
+    # Sort the other parcels into stages 2 to 4.
     gap = next_truck_gap(context)
     must_take, tight, relaxed = [], [], []
     for parcel_id in available_parcel_ids(parcel):
@@ -69,16 +84,19 @@ def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]
         else:
             relaxed.append(parcel_id)
 
+    # Stages 2 and 3.
     route = build_cheapest_insertion_route(
         parcel, context, candidate_ids=must_take, start_route=route, hold_early=True
     )
     route = build_cheapest_insertion_route(
         parcel, context, candidate_ids=tight, start_route=route, hold_early=True
     )
+    # Stage 4: filler must not make any stop miss its window.
     route = build_cheapest_insertion_route(
         parcel, context, candidate_ids=relaxed, start_route=route,
         max_new_violations=0, hold_early=True, max_detour=FILLER_MAX_DETOUR,
     )
+    # Wait one round if the trip is nearly empty and nothing on it is at risk.
     if worth_waiting(route, parcel, context) or _endgame_wait(route, parcel, context):
         return []
     departure_time = context["current_time"] + context["departure_delay"]
