@@ -67,7 +67,8 @@ def dispatch(parcel: Dict[str, Parcel], context: SimulationContext) -> List[str]
     """Build one route with last-chance, fleet-aware, and safe filler ordering."""
     # Stage 1: without this, trucks could wait while these parcels ran out of time.
     route = build_cheapest_insertion_route(
-        parcel, context, candidate_ids=_last_chance_parcels(parcel, context), hold_early=True
+        # hold_early: a parcel is never placed where the truck would arrive before its window opens.
+        parcel, context, candidate_ids=_last_chance_parcels(parcel, context), hold_early=True 
     )
 
     # Sort the other parcels into stages 2 to 4.
