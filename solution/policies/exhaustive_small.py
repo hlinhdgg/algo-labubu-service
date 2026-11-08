@@ -1,4 +1,4 @@
-"""Policy 4 (exhaustive search on small trips): greedy insertion, then the best stop order.
+"""Policy 3 (exhaustive search on small trips): greedy insertion, then the best stop order.
 
 The parcels for the trip are chosen with greedy insertion.
 If the trip has at most MAX_EXHAUSTIVE_STOPS different stops, every possible order of

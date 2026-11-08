@@ -1,4 +1,4 @@
-"""Policy: cluster first, route second, using a graph and breadth-first search (BFS).
+"""Policy 4: cluster first, route second, using a graph and breadth-first search (BFS).
 
 Step 1 (seed): pick the most urgent parcel that a truck could deliver on its own.
 Step 2 (graph): treat delivery locations as vertices of a directed graph. Each location

@@ -1,4 +1,4 @@
-"""Recommended policy: cheapest insertion in priority stages, using the fleet's return times.
+"""Policy 1 (recommended policy): cheapest insertion in priority stages, using the fleet's return times.
 
 Each truck builds one trip, adding the parcels most at risk first:
 

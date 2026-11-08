@@ -1,4 +1,4 @@
-"""Fleet-stage cheapest insertion, then recursive exact ordering for small trips."""
+"""Policy 2: Fleet-stage cheapest insertion, then recursive exact ordering for small trips."""
 
 from typing import Dict, List, Tuple
 

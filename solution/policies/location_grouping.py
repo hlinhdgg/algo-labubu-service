@@ -1,4 +1,4 @@
-"""Location groupin): hash map of parcels per stop + heap of stops by deadline.
+"""Policy 5: hash map of parcels per stop + heap of stops by deadline.
 
 Step 1 (hash map): group the unassigned parcels by delivery_location_id in a dict, so
          every parcel for the same stop is delivered together (zero extra distance).
