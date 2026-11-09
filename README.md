@@ -1,22 +1,22 @@
 # IS115 Last-Mile Delivery Planning
 
-Six policies decide which parcels each of 10 trucks carries on its next trip. **`fleet_aware` is recommended**, with a service rate of 95.99% against a best possible 96.46%.
+We built dispatch policies for the delivery simulation and compared them using the **service rate** (defined below). **Recommended policy: `fleet_aware`**, with a service rate of 95.99% against a best possible 96.46%. Tested on Python 3.13.
 
-The project needs Python 3.9 or newer and only the standard library. Run all commands from the project root. The code was run on Python 3.13.
+## How to run
 
-## Run it
+All commands are run from the project root. On Windows, use `python` instead of `python3`.
 
-One policy on one day:
+One policy, one day (simulator, then performance monitor):
 
 ```bash
 python3 -m simulator --policy solution.policies.fleet_aware --data data --day day_001 --output results/fleet_aware/day_001
 python3 -m solution.performance_monitor --data data --day day_001 --log results/fleet_aware/day_001/log.txt
 ```
 
-Everything (on Windows, use `python` and run the same commands for each policy and day):
+All policies, all 20 days:
 
 ```bash
-for policy in baseline fleet_aware recursive_fleet local_search priority_nearest exhaustive_small; do
+for policy in baseline fleet_aware recursive_fleet exhaustive_small bfs_cluster location_grouping local_search priority_nearest; do
   for n in $(seq -w 1 20); do
     day="day_0$n"
     python3 -m simulator --policy solution.policies.$policy \
@@ -27,97 +27,69 @@ for policy in baseline fleet_aware recursive_fleet local_search priority_nearest
 done
 ```
 
-Each run writes `log.txt` and `metrics.json` to `results/<policy>/<day>/`. All policies are deterministic, so re-running gives identical logs.
-
-## Results over 20 days
-
-| Policy | Service rate | Std dev | Worst day | Days 1-10 | Days 11-20 | Strict on-time | Delivered rate | On-time / delivered | Trips/day |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `fleet_aware` | **95.99%** | 0.48% | 95.13% | 95.96% | 96.01% | 94.63% | 96.35% | 98.22% | 32 |
-| `recursive_fleet` | 93.87% | 2.23% | 87.92% | 94.07% | 93.66% | 91.41% | 96.17% | 95.05% | 31 |
-| `priority_nearest` | 92.63% | 3.28% | 84.36% | 92.90% | 92.36% | 90.12% | 96.19% | 93.70% | 31 |
-| `exhaustive_small` | 91.95% | 2.28% | 88.11% | 92.23% | 91.67% | 86.95% | 95.73% | 90.82% | 30 |
-| `local_search` | 91.69% | 1.99% | 87.70% | 92.09% | 91.29% | 87.09% | 95.81% | 90.90% | 30 |
-| `baseline` | 27.41% | 1.61% | 24.75% | 27.23% | 27.58% | 27.41% | 40.47% | 67.73% | 21 |
-
-`fleet_aware` is 0.47 points below the 96.46% ceiling. Delivered rate and on-time / delivered are pooled over all parcels; the other columns are averages of daily values.
+On Windows, run the two commands above once for each policy and day. All policies are deterministic, so rerunning gives identical results. `local_search` and `priority_nearest` were explored earlier and are not in the final comparison; they are in the loop so their results in `results/` can be reproduced.
 
 ## Metric: service rate
 
-The service rate is the average score over every parcel that arrived that day:
+Each parcel gets a score, and the service rate is the average score over all parcels that arrived that day:
 
-- delivered inside its window (boundaries included): **1**;
-- delivered early or late: **1 − minutes outside the window ÷ window length**, and never below 0;
-- never delivered: **0**.
+- delivered inside its preferred window: **1**
+- delivered early or late: **1 − (minutes outside the window ÷ window length)**, never below 0
+- never delivered: **0**
 
-Near-misses earn partial credit, and a policy cannot raise its score by skipping hard parcels. The best possible score is 96.46%: 15,306 of the 15,867 parcels can be delivered on time, and the other 561 arrive too late for any truck to reach them and return by 18:00.
-
-`metrics.json` also records the strict on-time rate, delivered rate, on-time rate among delivered parcels, early and late counts, average lateness and number of trips.
+Near-misses still earn partial credit, and a policy cannot raise its score by skipping hard parcels. The best possible score is 96.46%, because 561 of the 15,867 parcels arrive too late for any truck to deliver them and return by 18:00.
 
 ## Policies
 
-| Module | Approach |
-|---|---|
-| `solution.policies.baseline` | Greedy first-fit dispatch in arrival order with capacity, range, and cutoff checks |
-| `solution.policies.fleet_aware` | Fleet-aware greedy insertion with last-chance prioritization, endgame waiting, detour-limited filler, and exhaustive ordering for small trips |
-| `solution.policies.exhaustive_small` | Greedy insertion followed by exhaustive stop ordering for trips with at most 8 stops |
-| `solution.policies.priority_nearest` | Greedy insertion with a heap shortlist of the 50 parcels nearest the route, and 2-opt local search |
-| `solution.policies.local_search` | Greedy insertion, then exhaustive stop ordering for trips with at most 8 stops and bounded 2-opt for larger trips |
-| `solution.policies.recursive_fleet` | Fleet-stage greedy insertion with a heap shortlist of the 50 most urgent parcels, recursive exhaustive ordering for small trips, and 2-opt for larger trips |
-
-Shared code is in `solution/policies/helpers.py`, and the metric is in `solution/performance_monitor.py`. All policies respect capacity, range and the 18:00 return. Apart from `baseline`, trips are compared by service lost first and distance second, using the metric's own formula.
-
-## How `fleet_aware` works
-
-Each truck builds one trip with cheapest insertion, adding the parcels most at risk first:
-
-1. **Last-chance parcels:** on time if sent now, but a direct trip one round later could not return by the cut-off.
-2. **Must-take parcels:** no truck coming back could still deliver them on time.
-3. **Other tight parcels:** at most 180 minutes to spare.
-4. **Relaxed parcels as filler:** only if no stop misses its window and the parcel adds at most 20 km.
-
-A parcel is never placed where the truck would arrive before its window opens. The truck then waits one round if it carries under 20 units and every parcel has over 60 minutes to spare. In the last 150 minutes, it also waits if the trip would still fit and every parcel would still be on time. Trips of up to 8 stops are then put in the exact best order.
-
-Each rule came from a failure traced in the logs:
-
-| Change | Problem it fixed | Days 1–10 | Days 11–20 |
-|---|---|---|---|
-| Trip cost uses service lost | A parcel 2 minutes late cost the same as one 3 hours late | 93.3% → 93.6% | 92.8% → 93.5% |
-| 20 km filler limit | Long morning trips left trucks away for the next wave (day 20: 170 → 79 minutes, late parcels 99 → 4) | 93.6% → 95.69% | 93.5% → 95.58% |
-| Last chance and end-of-day waiting | Trucks waited while parcels ran out of time (day 1, 16:00: three trucks waited and three parcels were lost) | 95.69% → 95.96% | 95.58% → 96.01% |
-
-The last rules improved 18 of 20 days and worsened none. Last chance gives most of the gain alone (95.79% and 95.89%). End-of-day waiting alone is mixed (95.71% on days 1–10, 95.49% on days 11–20), and it isn't free: added to last chance, it gains 27 parcels and loses 4.
-
-## Settings
-
-| Setting | Value | What it does | Evidence |
-|---|---|---|---|
-| `ROUTE_DISTANCE_BUDGET_FRACTION` | 0.9 | Trips stop growing at 90% of the 320 km range | 0.8 won on days 1–10 but lost on days 11–20 |
-| `TOP_K` | 50 | Parcels a heap shortlists for a close check at each step: the most urgent, or the nearest the route in `priority_nearest` | If none fit, all waiting parcels are checked |
-| `WAIT_MIN_LOAD`, `WAIT_SLACK` | 20, 60 | The waiting rule | Load 15 is clearly worse (worst day 89.07%); load 25 is lower (95.91%, 95.92%) |
-| `MAX_EXHAUSTIVE_STOPS` | 8 | Trip size for trying every stop order | 8! = 40,320 orders; 10 stops would be 3.6 million |
-| `SLACK_THRESHOLD` | 180 | Minutes to spare for a parcel to be tight | 150 is slightly higher (96.02%, 96.03%) but its worst day is lower (94.83% vs 95.13%) |
-| `FILLER_MAX_DETOUR` | 20 | Most km one filler parcel may add | 15–30 tie at 95.7% on days 1–10 (not fully explained); no limit gives 93.6% |
-| `ENDGAME_MINUTES` | 150 | How long before the cut-off end-of-day waiting applies | Beats 120 on one day only, and 150–240 tie, so the exact value has little evidence |
-
-## Ideas tried and dropped
-
-Service rate unless stated; “÷ delivered” means on-time ÷ delivered, used earlier in the project.
-
-| Idea | Result | Why dropped |
+| Policy | How it works | Data structures |
 |---|---|---|
-| Stop waiting if a last-chance parcel exists, without loading it | 95.69% → 95.63% (days 1–10) | The truck leaves without those parcels |
-| Block re-ordering that causes early arrivals | Early 64 → 0, late 36 → 111, 95.69% → 95.62% (days 1–10) | A few minutes early costs little under this metric |
-| Shorter distance limit (0.8) | `exhaustive_small` 91.0% → 91.5% on days 1–10, 90.6% → 90.2% on days 11–20 | Only looked better on the tuning days |
-| Morning reserve truck (÷ delivered) | `fleet_aware` 95.5% → 94.4% on days 1–10, 95.4% → 94.5% on days 11–20 | One held truck cannot cover a wave needing about three |
-| Booking parcels on returning trucks by capacity (strict on-time) | About 5 points below `fleet_aware` | Breaks up compact routes |
-| Shorter trips late in the day (÷ delivered) | 87.6% → 87.8% on days 1–10, 86.5% → 86.4% on days 11–20 | Short trips cannot reach far stops |
-| Must-take list including late parcels | 93.6% → 93.9% on days 1–10, 93.5% → 93.4% on days 11–20 | Did not hold on days 11–20 |
-| Allowing slightly early arrivals (before the filler limit) | 93.5%, 93.1%, 93.0% vs 93.6% (days 1–10) | Lower |
-| Shortlist of 100 instead of 50 | 93.6%, no gain | No benefit |
+| `fleet_aware` | Builds each trip by cheapest insertion, adding the most urgent parcels first, then finds the best stop order | Heap |
+| `recursive_fleet` | Same parcel groups as `fleet_aware`, but the stop order comes from a recursive search (2-opt for more than 8 stops) | Heap, recursion |
+| `exhaustive_small` | Cheapest insertion over all waiting parcels, then tries every stop order for trips with at most 8 stops | Heap |
+| `bfs_cluster` | Finds parcels near the most urgent one with a breadth-first search, then builds the trip from only those parcels | Graph, queue |
+| `location_grouping` | Groups parcels by location and visits locations in order of earliest deadline | Hash map, heap |
 
-## Limits of these results
+The heap picks the 50 most urgent waiting parcels to check first at each insertion step. Shared code is in `solution/policies/helpers.py`.
 
-- `fleet_aware`'s settings were tuned on days 1–10 and checked on days 11–20. Those are **validation days, not unseen data**, because their scores influenced decisions.
+### How `fleet_aware` works
+
+Each truck builds one trip with cheapest insertion, adding parcels in this order:
+
+1. **Last-chance parcels:** can be on time if sent now, but not if the truck waits one more planning round.
+2. **Must-take parcels:** no other truck returning in time could deliver them on time.
+3. **Tight parcels:** at most 180 minutes of slack (time left before the window closes).
+4. **Relaxed parcels, as extras only:** added if no stop misses its window and the parcel adds at most 20 km.
+
+A parcel is never placed where the truck would arrive before its window opens. A truck carrying less than 20 units waits one round if every parcel has more than 60 minutes of slack. In the last 150 minutes before 18:00, a small trip also waits if all its parcels would still be on time. Trips with at most 8 stops are then put in the exact best order by trying every order.
+
+## Results over 20 days
+
+| Policy | Service rate | Std dev | Worst day | Strict on-time | Delivered rate |
+|---|---:|---:|---:|---:|---:|
+| `fleet_aware` | **95.99%** | 0.48% | 95.13% | 94.63% | 96.35% |
+| `recursive_fleet` | 93.87% | 2.23% | 87.92% | 91.41% | 96.17% |
+| `bfs_cluster` | 92.11% | 2.78% | 87.05% | 91.18% | 96.08% |
+| `exhaustive_small` | 91.95% | 2.28% | 88.11% | 86.95% | 95.73% |
+| `location_grouping` | 83.97% | 3.67% | 77.07% | 75.64% | 93.74% |
+| `baseline` | 27.41% | 1.61% | 24.75% | 27.41% | 40.47% |
+
+Service rate, std dev and worst day are calculated from the 20 daily values. Strict on-time counts only parcels delivered inside their window.
+
+## Key settings
+
+| Setting | Value | Meaning |
+|---|---|---|
+| `ROUTE_DISTANCE_BUDGET_FRACTION` | 0.9 | Trips stop growing at 90% of the 320 km range |
+| `TOP_K` | 50 | Number of urgent parcels checked first at each insertion step |
+| `MAX_EXHAUSTIVE_STOPS` | 8 | Largest trip where every stop order is tried (8! = 40,320 orders) |
+| `WAIT_MIN_LOAD`, `WAIT_SLACK` | 20, 60 | A truck with less than 20 units waits if every parcel has over 60 minutes of slack |
+| `SLACK_THRESHOLD` | 180 | Minutes of slack at or below which a parcel counts as tight |
+| `FILLER_MAX_DETOUR` | 20 | Most km one extra (relaxed) parcel may add to a trip |
+| `ENDGAME_MINUTES` | 150 | How long before 18:00 the end-of-day waiting rule applies |
+| `K_NEIGHBOURS`, `MAX_CLUSTER_PARCELS` | 4, 40 | `bfs_cluster` only: neighbours per location and parcels per cluster |
+
+## Limitations
+
+- The `fleet_aware` settings were tuned on days 1-10 and checked on days 11-20. Because those scores influenced our choices, days 11-20 are validation days, not unseen data.
+- `bfs_cluster` and `location_grouping` were added later and have not been tuned.
 - The results cover 20 days at one depot, so they may not carry over to other demand patterns.
-- Older figures above were measured before later rules were added, so they show the effect of each change at the time.

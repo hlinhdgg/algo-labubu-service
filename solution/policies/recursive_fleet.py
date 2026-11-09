@@ -1,4 +1,17 @@
-"""Policy 2: Fleet-stage cheapest insertion, then recursive exact ordering for small trips."""
+"""Policy 2: cheapest insertion in fleet-aware stages, then a recursive search for the best stop order.
+
+Each truck builds one trip, adding the parcels most at risk first:
+
+1. must-take parcels: no truck coming back could still deliver them on time;
+2. other tight parcels: at most SLACK_THRESHOLD minutes to spare;
+3. relaxed parcels as filler: only if no stop misses its window.
+
+A parcel is never placed where the truck would arrive before its window opens. A nearly
+empty truck may wait one round so it stays free for later parcels. Trips with at most
+MAX_EXHAUSTIVE_STOPS stops are then put in the exact best order by a recursive function
+that tries every stop order; longer trips are improved with 2-opt instead. Unlike
+Policy 1, there is no last-chance stage and no end-of-day waiting rule.
+"""
 
 from typing import Dict, List, Tuple
 

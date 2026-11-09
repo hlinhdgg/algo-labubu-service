@@ -28,10 +28,9 @@ TOP_K = 50
 
 # A truck stays at the hub for one planning round instead of leaving with less than
 # WAIT_MIN_LOAD units, as long as every parcel it would carry has more than
-# WAIT_SLACK minutes to spare (see worth_waiting). Tuned on days 1-10 with
-# The waiting thresholds were tuned experimentally: 15, 20 and 25 help a lot,
-# while 30 collapses;
-# a slack of 30, 60 or 120 makes little difference.
+# WAIT_SLACK minutes to spare (see worth_waiting). Tuned experimentally on days 1-10:
+# a minimum load of 15, 20 or 25 helps a lot, while 30 collapses; a slack of 30, 60
+# or 120 makes little difference.
 WAIT_MIN_LOAD = 20.0
 WAIT_SLACK = 60.0
 
@@ -271,7 +270,6 @@ def build_cheapest_insertion_route(
     budget: Optional[float] = None,
     max_new_violations: Optional[int] = None,
     hold_early: bool = False,
-    shortlist_by: str = "urgency",
     max_detour: Optional[float] = None,
 ) -> List[str]:
     """Build one route with the TSP-style cheapest-insertion greedy.
@@ -293,9 +291,8 @@ def build_cheapest_insertion_route(
     start_route continues an existing partial route instead of starting empty; budget
     overrides the default distance limit (preferred_budget); max_new_violations caps how
     many missed windows one insertion may add (0 = none); hold_early forbids slots where
-    the new parcel would arrive before its window opens. shortlist_by="nearby" picks the
-    top_k candidates by how close they are to a stop already on the route, instead of
-    by urgency. max_detour limits how many km one insertion may add to a non-empty route.
+    the new parcel would arrive before its window opens. 
+    max_detour limits how many km one insertion may add to a non-empty route.
     """
 
     distances = context["travel_distance"]
@@ -315,12 +312,9 @@ def build_cheapest_insertion_route(
             else None
         )
         pool = sorted(remaining)
-        if shortlist_by == "nearby":
-            stops = {HUB} | {parcel[pid]["delivery_location_id"] for pid in route}
-            key = lambda pid: min(distances[stop][parcel[pid]["delivery_location_id"]] for stop in stops)
-        else:
-            key = lambda pid: urgency_key(pid, parcel, context)
-        shortlist = heapq.nsmallest(top_k, pool, key=key)
+        shortlist = heapq.nsmallest(
+            top_k, pool, key=lambda pid: urgency_key(pid, parcel, context)
+        )
         choice = _best_candidate(
             shortlist, route, parcel, distances, departure_time, budget, capacity,
             max_violations, hold_early, max_detour
